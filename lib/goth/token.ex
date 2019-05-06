@@ -42,6 +42,8 @@ defmodule Goth.Token do
   alias Goth.TokenStore
   alias Goth.Client
 
+  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
+
   @type t :: %__MODULE__{
           token: String.t(),
           type: String.t(),
@@ -68,17 +70,25 @@ defmodule Goth.Token do
 
   @spec for_scope(scope :: String.t(), sub :: String.t() | nil) :: {:ok, t}
   def for_scope(scope, sub) when is_binary(scope) do
-    case TokenStore.find({:default, scope}, sub) do
-      :error -> retrieve_and_store!({:default, scope}, sub)
-      {:ok, token} -> {:ok, token}
+    if @using_emulator do
+      {:ok, ""}
+    else
+      case TokenStore.find({:default, scope}, sub) do
+        :error -> retrieve_and_store!({:default, scope}, sub)
+        {:ok, token} -> {:ok, token}
+      end
     end
   end
 
   @spec for_scope(info :: {String.t() | atom(), String.t()}, sub :: String.t() | nil) :: {:ok, t}
   def for_scope({account, scope}, sub) do
-    case TokenStore.find({account, scope}, sub) do
-      :error -> retrieve_and_store!({account, scope}, sub)
-      {:ok, token} -> {:ok, token}
+    if @using_emulator do
+      {:ok, ""}
+    else
+      case TokenStore.find({account, scope}, sub) do
+        :error -> retrieve_and_store!({account, scope}, sub)
+        {:ok, token} -> {:ok, token}
+      end
     end
   end
 

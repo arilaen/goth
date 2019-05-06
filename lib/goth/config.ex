@@ -27,6 +27,7 @@ defmodule Goth.Config do
   end
 
   @optional_callbacks init: 1
+  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
 
   @doc """
   A callback executed when the Goth.Config server starts.
@@ -63,27 +64,29 @@ defmodule Goth.Config do
   end
 
   defp load_and_init({false, app_config}) do
-    config =
-      from_json(app_config) || from_config(app_config) || from_creds_file(app_config) ||
+    if @using_emulator do
+      {:ok, %{ default: %{ "project_id" => determine_project_id(app_config) }}}
+    else
+      config = from_json(app_config) || from_config(app_config) || from_creds_file(app_config) ||
         from_gcloud_adc(app_config) || from_metadata(app_config)
+      config =
+        config
+        |> map_config()
+        |> Enum.map(fn {account, config} ->
+          actor_email = Keyword.get(app_config, :actor_email)
+          project_id = determine_project_id(config, app_config)
 
-    config =
-      config
-      |> map_config()
-      |> Enum.map(fn {account, config} ->
-        actor_email = Keyword.get(app_config, :actor_email)
-        project_id = determine_project_id(config, app_config)
+          {
+            account,
+            config
+            |> Map.put("project_id", project_id)
+            |> Map.put("actor_email", actor_email)
+          }
+        end)
+        |> Enum.into(%{})
 
-        {
-          account,
-          config
-          |> Map.put("project_id", project_id)
-          |> Map.put("actor_email", actor_email)
-        }
-      end)
-      |> Enum.into(%{})
-
-    {:ok, config}
+      {:ok, config}
+    end
   end
 
   def map_config(config) when is_map(config), do: %{default: config}
@@ -91,10 +94,14 @@ defmodule Goth.Config do
   def map_config(config) when is_list(config) do
     config
     |> Enum.map(fn config ->
-      {
-        config["client_email"],
-        config
-      }
+      if @using_emulator do
+        { config }
+      else
+        {
+          config["client_email"],
+          config
+        }
+      end
     end)
     |> Enum.into(%{})
   end
@@ -170,10 +177,15 @@ defmodule Goth.Config do
     %{"token_source" => :metadata}
   end
 
+  defp determine_project_id(dynamic_config) do
+    Keyword.get(dynamic_config, :project_id) || System.get_env("GOOGLE_CLOUD_PROJECT") ||
+      System.get_env("GCLOUD_PROJECT") || System.get_env("DEVSHELL_PROJECT_ID")
+  end
+
   defp determine_project_id(config, dynamic_config) do
     case Keyword.get(dynamic_config, :project_id) || System.get_env("GOOGLE_CLOUD_PROJECT") ||
            System.get_env("GCLOUD_PROJECT") || System.get_env("DEVSHELL_PROJECT_ID") ||
-           config["project_id"] do
+           Map.get(config, :project_id) do
       nil ->
         try do
           Client.retrieve_metadata_project()
@@ -182,8 +194,8 @@ defmodule Goth.Config do
             case e do
               %HTTPoison.Error{reason: :nxdomain} ->
                 raise " Failed to retrieve project data from GCE internal metadata service.
-                   Either you haven't configured your GCP credentials, you aren't running on GCE, or both.
-                   Please see README.md for instructions on configuring your credentials."
+                  Either you haven't configured your GCP credentials, you aren't running on GCE, or both.
+                  Please see README.md for instructions on configuring your credentials."
 
               _ ->
                 e

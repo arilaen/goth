@@ -2,6 +2,8 @@ defmodule Goth.Client do
   alias Goth.Config
   alias Goth.Token
 
+  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
+
   @moduledoc """
   `Goth.Client` is the module through which all interaction with Google's APIs flows.
   For the most part, you probably don't want to use this module directly, but instead
@@ -54,57 +56,69 @@ defmodule Goth.Client do
   end
 
   def get_access_token(:metadata, {service_account, scope}, _opts) do
-    headers = [{"Metadata-Flavor", "Google"}]
-    account = Application.get_env(:goth, :metadata_account, "default")
-    metadata = Application.get_env(:goth, :metadata_url, "http://metadata.google.internal")
-    endpoint = "computeMetadata/v1/instance/service-accounts"
-    url_base = "#{metadata}/#{endpoint}/#{account}"
+    if @using_emulator do
+      {:ok, ""}
+    else
+      headers = [{"Metadata-Flavor", "Google"}]
+      account = Application.get_env(:goth, :metadata_account, "default")
+      metadata = Application.get_env(:goth, :metadata_url, "http://metadata.google.internal")
+      endpoint = "computeMetadata/v1/instance/service-accounts"
+      url_base = "#{metadata}/#{endpoint}/#{account}"
 
-    url = "#{url_base}/token"
-    {:ok, token} = HTTPoison.get(url, headers)
-    {:ok, Token.from_response_json({service_account, scope}, token.body)}
+      url = "#{url_base}/token"
+      {:ok, token} = HTTPoison.get(url, headers)
+      {:ok, Token.from_response_json({service_account, scope}, token.body)}
+    end
   end
 
   # Fetch an access token from Google's OAuth service using a JWT
   def get_access_token(:oauth_jwt, {account, scope}, opts) do
-    %{sub: sub} = destruct_opts(opts)
-    endpoint = Application.get_env(:goth, :endpoint, "https://www.googleapis.com")
-    url = "#{endpoint}/oauth2/v4/token"
+    if @using_emulator do
+      {:ok, ""}
+    else
+      %{sub: sub} = destruct_opts(opts)
+      endpoint = Application.get_env(:goth, :endpoint, "https://www.googleapis.com")
+      url = "#{endpoint}/oauth2/v4/token"
 
-    body =
-      {:form,
-       [
-         grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-         assertion: jwt({account, scope}, opts)
-       ]}
+      body =
+        {:form,
+        [
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion: jwt({account, scope}, opts)
+        ]}
 
-    headers = [{"Content-Type", "application/x-www-form-urlencoded"}]
+      headers = [{"Content-Type", "application/x-www-form-urlencoded"}]
 
-    HTTPoison.post(url, body, headers)
-    |> handle_response({account, scope}, sub)
+      HTTPoison.post(url, body, headers)
+      |> handle_response({account, scope}, sub)
+    end
   end
 
   # Fetch an access token from Google's OAuth service using a refresh token
   def get_access_token(:oauth_refresh, {account, scope}, _opts) do
-    {:ok, refresh_token} = Config.get(:refresh_token)
-    {:ok, client_id} = Config.get(:client_id)
-    {:ok, client_secret} = Config.get(:client_secret)
-    endpoint = Application.get_env(:goth, :endpoint, "https://www.googleapis.com")
-    url = "#{endpoint}/oauth2/v4/token"
+    if @using_emulator do
+      {:ok, ""}
+    else
+      {:ok, refresh_token} = Config.get(:refresh_token)
+      {:ok, client_id} = Config.get(:client_id)
+      {:ok, client_secret} = Config.get(:client_secret)
+      endpoint = Application.get_env(:goth, :endpoint, "https://www.googleapis.com")
+      url = "#{endpoint}/oauth2/v4/token"
 
-    body =
-      {:form,
-       [
-         grant_type: "refresh_token",
-         refresh_token: refresh_token,
-         client_id: client_id,
-         client_secret: client_secret
-       ]}
+      body =
+        {:form,
+        [
+          grant_type: "refresh_token",
+          refresh_token: refresh_token,
+          client_id: client_id,
+          client_secret: client_secret
+        ]}
 
-    headers = [{"Content-Type", "application/x-www-form-urlencoded"}]
+      headers = [{"Content-Type", "application/x-www-form-urlencoded"}]
 
-    HTTPoison.post(url, body, headers)
-    |> handle_response({account, scope})
+      HTTPoison.post(url, body, headers)
+      |> handle_response({account, scope})
+    end
   end
 
   def claims(scope, opts \\ [])
