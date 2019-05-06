@@ -42,7 +42,7 @@ defmodule Goth.Token do
   alias Goth.TokenStore
   alias Goth.Client
 
-  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
+  @using_emulator not is_nil({:system, "PUBSUB_EMULATOR_HOST"})
 
   @type t :: %__MODULE__{
           token: String.t(),

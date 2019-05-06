@@ -27,7 +27,7 @@ defmodule Goth.Config do
   end
 
   @optional_callbacks init: 1
-  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
+  @using_emulator not is_nil({:system, "PUBSUB_EMULATOR_HOST"})
 
   @doc """
   A callback executed when the Goth.Config server starts.

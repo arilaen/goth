@@ -2,7 +2,7 @@ defmodule Goth.Client do
   alias Goth.Config
   alias Goth.Token
 
-  @using_emulator not is_nil(System.get_env("PUBSUB_EMULATOR_HOST"))
+  @using_emulator not is_nil({:system, "PUBSUB_EMULATOR_HOST"})
 
   @moduledoc """
   `Goth.Client` is the module through which all interaction with Google's APIs flows.
